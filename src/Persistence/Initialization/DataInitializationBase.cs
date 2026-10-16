@@ -1,4 +1,4 @@
-﻿// <copyright file="DataInitializationBase.cs" company="MUnique">
+// <copyright file="DataInitializationBase.cs" company="MUnique">
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 // </copyright>
 
@@ -84,6 +84,11 @@ public abstract class DataInitializationBase : IDataInitializationPlugIn
     /// Gets the test accounts initializer.
     /// </summary>
     protected abstract IInitializer? TestAccountsInitializer { get; }
+
+    /// <summary>
+    /// Gets the experience rate of the game servers.
+    /// </summary>
+    protected virtual float ExperienceRate => 1.0f;
 
     /// <summary>
     /// Creates the initial data for a server.
@@ -209,9 +214,21 @@ public abstract class DataInitializationBase : IDataInitializationPlugIn
             }
         });
 
+        this.ApplyCustomPlugInConfigurations(plugInManager, referenceHandler);
+
         this.AddAllUpdateEntries(plugInManager);
 
         await this.Context.SaveChangesAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies custom configurations to registered plug-ins.
+    /// </summary>
+    /// <param name="plugInManager">The plug in manager.</param>
+    /// <param name="referenceHandler">The reference handler.</param>
+    protected virtual void ApplyCustomPlugInConfigurations(PlugInManager plugInManager, ReferenceHandler referenceHandler)
+    {
+        // Can be overridden in derived classes
     }
 
     /// <summary>
@@ -313,7 +330,7 @@ public abstract class DataInitializationBase : IDataInitializationPlugIn
             server.SetGuid((short)i);
             server.ServerID = (byte)i;
             server.Description = $"Server {i}";
-            server.ExperienceRate = 1.0f;
+            server.ExperienceRate = this.ExperienceRate;
             server.GameConfiguration = this.GameConfiguration;
             server.ServerConfiguration = gameServerConfiguration;
 

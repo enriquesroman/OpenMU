@@ -79,6 +79,8 @@ public partial class MainForm : Form
         this._serversComboBox.DataSource = this.Hosts;
         if (!File.Exists(ConfigFileName))
         {
+            this.Hosts.Add(new ServerHostSettings { Description = "OpenMU Railway (ConnectServer)", Address = "autorack.proxy.rlwy.net", Port = 15013 });
+            this.Hosts.Add(new ServerHostSettings { Description = "Local ConnectServer", Address = "localhost", Port = 44405 });
             return;
         }
 
@@ -155,6 +157,7 @@ public partial class MainForm : Form
         {
             var settings = dialog.Settings;
             this._hostsBindingList.Add(settings);
+            this._serversComboBox.SelectedItem = settings;
             this.SaveCurrentOptions();
             this.UpdateButtonStates();
         }
