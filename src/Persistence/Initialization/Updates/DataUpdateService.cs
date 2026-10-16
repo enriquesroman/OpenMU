@@ -1,4 +1,4 @@
-﻿// <copyright file="DataUpdateService.cs" company="MUnique">
+// <copyright file="DataUpdateService.cs" company="MUnique">
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 // </copyright>
 
@@ -81,22 +81,38 @@ public class DataUpdateService
     {
         using var context = this._contextProvider.CreateNewContext();
         var installedVersions = await GetInstalledVersionsAsync(context).ConfigureAwait(false);
-        var gameConfiguration = (await context.GetAsync<GameConfiguration>().ConfigureAwait(false)).First();
 
         var orderedUpdates = OrderByDependencies(updates, installedVersions);
-        var updateStates = await context.GetAsync<ConfigurationUpdateState>().ConfigureAwait(false);
-        var updateState = updateStates.FirstOrDefault() ?? context.CreateNew<ConfigurationUpdateState>();
+        var exceptions = new List<Exception>();
+
         foreach (var update in orderedUpdates)
         {
             progress.Report((update.Key, false));
-            await update.ApplyUpdateAsync(context, gameConfiguration).ConfigureAwait(false);
-            updateState.InitializationKey = update.DataInitializationKey;
-            await context.SaveChangesAsync().ConfigureAwait(false);
-            progress.Report((update.Key, true));
+            try
+            {
+                using var updateContext = this._contextProvider.CreateNewContext();
+                var gameConfiguration = (await updateContext.GetAsync<GameConfiguration>().ConfigureAwait(false)).First();
+                var updateStates = await updateContext.GetAsync<ConfigurationUpdateState>().ConfigureAwait(false);
+                var updateState = updateStates.FirstOrDefault() ?? updateContext.CreateNew<ConfigurationUpdateState>();
+
+                await update.ApplyUpdateAsync(updateContext, gameConfiguration).ConfigureAwait(false);
+                updateState.InitializationKey = update.DataInitializationKey;
+                await updateContext.SaveChangesAsync().ConfigureAwait(false);
+                progress.Report((update.Key, true));
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(new InvalidOperationException($"Error applying update {update.Name} ({update.Key}): {ex.Message}", ex));
+            }
         }
 
         progress.Report((Guid.Empty, true));
         this.UpdatesInstalled?.SafeInvokeAsync();
+
+        if (exceptions.Count > 0)
+        {
+            throw new AggregateException(exceptions);
+        }
     }
 
     /// <summary>

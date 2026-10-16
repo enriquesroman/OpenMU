@@ -1,4 +1,4 @@
-﻿@page "/config-updates"
+@page "/config-updates"
 @attribute [Authorize(Policy = AdminPolicies.Administrator)]
 @using MUnique.OpenMU.DataModel
 @using MUnique.OpenMU.DataModel.Configuration
@@ -42,10 +42,6 @@
             else if (update.State == UpdateState.Installed)
             {
                 <span class="oi oi-check"></span>
-            }
-            else if (update.IsMandatory)
-            {
-                <InputCheckbox class="form-check-input" @bind-Value="@update.Selected" disabled="disabled"></InputCheckbox>
             }
             else
             {
