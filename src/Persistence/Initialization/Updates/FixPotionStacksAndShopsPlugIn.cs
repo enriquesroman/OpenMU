@@ -38,6 +38,12 @@ public abstract class FixPotionStacksAndShopsPlugIn : UpdatePlugInBase
     public override DateTime CreatedAt => new(2026, 10, 16, 12, 0, 0, DateTimeKind.Utc);
 
     /// <inheritdoc />
+    public override int Version => 2;
+
+    /// <inheritdoc />
+    public override DateTime UpdatedAt => new(2026, 10, 16, 12, 45, 0, DateTimeKind.Utc);
+
+    /// <inheritdoc />
     protected override async ValueTask ApplyAsync(IContext context, GameConfiguration gameConfiguration)
     {
         // 1. Set max stack durability to 50 for standard potions and scrolls
@@ -47,7 +53,7 @@ public abstract class FixPotionStacksAndShopsPlugIn : UpdatePlugInBase
             potionDef.MaximumItemLevel = 0;
         }
 
-        // 2. Clean potion shops (Amy 255, Elf Lala 254, Izabel 247) to sell neat 50-stack potions
+        // 2. Clean potion shops (Amy 253, Elf Lala 242, Izabel 245, Thompson 231, Pamela 376, Angela 377, etc.)
         var potionsToSell = new (byte Slot, byte Number)[]
         {
             (0, 0),  // Apple +0 x50
@@ -61,29 +67,44 @@ public abstract class FixPotionStacksAndShopsPlugIn : UpdatePlugInBase
             (8, 10), // Town Portal Scroll +0 x50
         };
 
-        foreach (var npcNumber in new short[] { 255, 254, 247 })
-        {
-            if (gameConfiguration.Monsters.FirstOrDefault(m => m.Number == npcNumber) is { MerchantStore: { } store })
-            {
-                var oldPotions = store.Items
-                    .Where(i => i.ItemSlot < 24 && i.Definition?.Group == 14 && i.Definition.Number is 0 or 1 or 2 or 3 or 4 or 5 or 6 or 8 or 10)
-                    .ToList();
-                foreach (var item in oldPotions)
-                {
-                    store.Items.Remove(item);
-                }
+        var potionNpcNumbers = new short[] { 253, 242, 245, 231, 259, 376, 377, 541, 543 };
 
-                foreach (var (slot, number) in potionsToSell)
+        var targetMonsters = gameConfiguration.Monsters
+            .Where(m => m.MerchantStore is not null && (potionNpcNumbers.Contains(m.Number) || m.MerchantStore.Items.Any(i => i.Definition?.Group == 14 && (i.Definition.Number is 0 or 1 or 2 or 3 or 4 or 5 or 6 or 8 or 10))))
+            .ToList();
+
+        var slotsToUse = potionsToSell.Select(p => p.Slot).ToHashSet();
+
+        foreach (var monster in targetMonsters)
+        {
+            var store = monster.MerchantStore!;
+            var oldPotions = store.Items
+                .Where(i => i.Definition?.Group == 14 && (i.Definition.Number is 0 or 1 or 2 or 3 or 4 or 5 or 6 or 8 or 10))
+                .ToList();
+
+            foreach (var item in oldPotions)
+            {
+                store.Items.Remove(item);
+                await context.DeleteAsync(item).ConfigureAwait(false);
+            }
+
+            var conflictingItems = store.Items.Where(i => slotsToUse.Contains(i.ItemSlot)).ToList();
+            foreach (var item in conflictingItems)
+            {
+                store.Items.Remove(item);
+                await context.DeleteAsync(item).ConfigureAwait(false);
+            }
+
+            foreach (var (slot, number) in potionsToSell)
+            {
+                if (gameConfiguration.Items.FirstOrDefault(i => i.Group == 14 && i.Number == number) is { } def)
                 {
-                    if (gameConfiguration.Items.FirstOrDefault(i => i.Group == 14 && i.Number == number) is { } def)
-                    {
-                        var item = context.CreateNew<Item>();
-                        item.Definition = def;
-                        item.ItemSlot = slot;
-                        item.Durability = 50;
-                        item.Level = 0;
-                        store.Items.Add(item);
-                    }
+                    var item = context.CreateNew<Item>();
+                    item.Definition = def;
+                    item.ItemSlot = slot;
+                    item.Durability = 50;
+                    item.Level = 0;
+                    store.Items.Add(item);
                 }
             }
         }
