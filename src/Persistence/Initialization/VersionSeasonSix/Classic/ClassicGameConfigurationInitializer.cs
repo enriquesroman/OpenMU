@@ -145,44 +145,50 @@ public class ClassicGameConfigurationInitializer : GameConfigurationInitializer
 
     private void AdjustMerchantStores()
     {
-        // 1. Stack potions to 50 in potion girl shops (Amy Number 255, Elf Lala Number 254)
-        foreach (var npcNumber in new short[] { 255, 254 })
+        // 1. Set max stack durability to 50 for standard potions and scrolls
+        foreach (var potionDef in this.GameConfiguration.Items.Where(i => i.Group == 14 && (i.Number is 0 or 1 or 2 or 3 or 4 or 5 or 6 or 8 or 10)))
+        {
+            potionDef.Durability = 50;
+            potionDef.MaximumItemLevel = 0;
+        }
+
+        // 2. Clean potion shops (Amy 255, Elf Lala 254, Izabel 247) to sell neat 50-stack potions
+        var potionsToSell = new (byte Slot, byte Number)[]
+        {
+            (0, 0),  // Apple +0 x50
+            (1, 1),  // Small Healing Potion +0 x50
+            (2, 2),  // Medium Healing Potion +0 x50
+            (3, 3),  // Large Healing Potion +0 x50
+            (4, 4),  // Small Mana Potion +0 x50
+            (5, 5),  // Medium Mana Potion +0 x50
+            (6, 6),  // Large Mana Potion +0 x50
+            (7, 8),  // Antidote +0 x50
+            (8, 10), // Town Portal Scroll +0 x50
+        };
+
+        foreach (var npcNumber in new short[] { 255, 254, 247 })
         {
             if (this.GameConfiguration.Monsters.FirstOrDefault(m => m.Number == npcNumber) is { MerchantStore: { } store })
             {
-                foreach (var item in store.Items)
+                var oldPotions = store.Items
+                    .Where(i => i.ItemSlot < 24 && i.Definition?.Group == 14 && i.Definition.Number is 0 or 1 or 2 or 3 or 4 or 5 or 6 or 8 or 10)
+                    .ToList();
+                foreach (var item in oldPotions)
                 {
-                    if (item.Definition?.Group == 14 && item.Definition.Number is 1 or 2 or 3 or 4 or 5 or 6)
-                    {
-                        item.Durability = 50;
-                    }
+                    store.Items.Remove(item);
                 }
-            }
-        }
 
-        // 2. Add essential skill scrolls/orbs to Pasi the Mage (Number 249) in Lorencia
-        if (this.GameConfiguration.Monsters.FirstOrDefault(m => m.Number == 249) is { MerchantStore: { } pasiStore })
-        {
-            var skillsToAdd = new (byte Slot, byte Group, byte Number)[]
-            {
-                (8, 15, 9),   // Scroll of Evil Spirit
-                (9, 15, 18),  // Scroll of Soul Barrier
-                (10, 15, 5),  // Scroll of Hellfire
-                (11, 12, 14), // Orb of Greater Fortitude
-                (12, 12, 12), // Orb of Rageful Blow
-                (13, 12, 21), // Scroll of Fire Burst
-                (14, 15, 8),  // Scroll of Aqua Beam
-            };
-
-            foreach (var (slot, group, number) in skillsToAdd)
-            {
-                if (this.GameConfiguration.Items.FirstOrDefault(i => i.Group == group && i.Number == number) is { } definition)
+                foreach (var (slot, number) in potionsToSell)
                 {
-                    var item = this.Context.CreateNew<Item>();
-                    item.Definition = definition;
-                    item.ItemSlot = slot;
-                    item.Durability = 1;
-                    pasiStore.Items.Add(item);
+                    if (this.GameConfiguration.Items.FirstOrDefault(i => i.Group == 14 && i.Number == number) is { } def)
+                    {
+                        var item = this.Context.CreateNew<Item>();
+                        item.Definition = def;
+                        item.ItemSlot = slot;
+                        item.Durability = 50;
+                        item.Level = 0;
+                        store.Items.Add(item);
+                    }
                 }
             }
         }
