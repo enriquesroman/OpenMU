@@ -4,7 +4,9 @@
 
 namespace MUnique.OpenMU.Persistence.Initialization.Updates;
 
+using MUnique.OpenMU.DataModel;
 using MUnique.OpenMU.DataModel.Configuration;
+using MUnique.OpenMU.DataModel.Entities;
 using MUnique.OpenMU.PlugIns;
 
 /// <summary>
@@ -98,6 +100,7 @@ public class DataUpdateService
                 await update.ApplyUpdateAsync(updateContext, gameConfiguration).ConfigureAwait(false);
                 updateState.InitializationKey = update.DataInitializationKey;
                 await updateContext.SaveChangesAsync().ConfigureAwait(false);
+                await this.SynchronizeCachedMerchantStoresAsync(gameConfiguration).ConfigureAwait(false);
                 progress.Report((update.Key, true));
             }
             catch (Exception ex)
@@ -228,5 +231,33 @@ public class DataUpdateService
             .Where(up => up.InstalledAt is not null)
             .GroupBy(up => up.Key)
             .ToDictionary(group => group.Key, group => group.Max(up => up.Version));
+    }
+
+    private async ValueTask SynchronizeCachedMerchantStoresAsync(GameConfiguration updatedConfiguration)
+    {
+        using var configContext = this._contextProvider.CreateNewConfigurationContext();
+        if ((await configContext.GetAsync<GameConfiguration>().ConfigureAwait(false)).FirstOrDefault() is not { } cachedConfig
+            || ReferenceEquals(cachedConfig, updatedConfiguration))
+        {
+            return;
+        }
+
+        foreach (var monster in updatedConfiguration.Monsters)
+        {
+            if (monster.MerchantStore is not { } updatedStore
+                || cachedConfig.Monsters.FirstOrDefault(m => m.Number == monster.Number)?.MerchantStore is not { } cachedStore)
+            {
+                continue;
+            }
+
+            (cachedStore as IAssignable<ItemStorage>)?.AssignValuesOf(updatedStore, cachedConfig);
+            foreach (var item in updatedStore.Items)
+            {
+                if (cachedStore.Items.FirstOrDefault(i => i.Equals(item)) is IAssignable<Item> cachedItem)
+                {
+                    cachedItem.AssignValuesOf(item, cachedConfig);
+                }
+            }
+        }
     }
 }
